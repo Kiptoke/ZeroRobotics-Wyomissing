@@ -1,3 +1,4 @@
+/*
 Different strategies to explore:
 1. Pick up analyzer first, then go to assigned square and drill.
 2. Multiple drills at the same location
