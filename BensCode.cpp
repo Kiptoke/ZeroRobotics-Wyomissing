@@ -22,7 +22,6 @@ float myPos[3];
 float attitude[3];
 float store_att[3];
 float quat[4];
-float vectorbetween[3];
 float torques[3];
 
 //Target position
@@ -34,19 +33,23 @@ float tolerance ;
 
 //Target square
 int square[3];
-float velocity_zero_target[3];
+
+//Velocity - ie Andrew slowly descends into insanity
+float distance;         // Andrew Note - Didn't think I'd need this, but hey, might be useful
+float vectorBetween[3]; // Andrew Note - boy I love defining variables
 
 //step counter
-int step ;
+int step;
 int cycle;
 
 //This function is called once when your code is first loaded.
 void init() {
     step = 1;
     cycle = 0;
-    velocity_zero_target[0] = 0.0;
-    velocity_zero_target[1] = 0.0;
-    velocity_zero_target[2] = 0.0;
+    vectorBetween[0] = 0.0;
+    vectorBetween[1] = 0.0;
+    vectorBetween[2] = 0.0;
+    distance = 0;
 
     attitude[0] = -1;
     attitude[1] = 0;
@@ -70,14 +73,29 @@ void init() {
 }
 
 //go to position in X,Y coord
-void goToPosition( float posn[] , float tolerance , int inc ) {
+//Andrew - I changed things here to account for velocity, hope it works
+void goToPosition(float posn[] , float tolerance , int inc) {
     float err = fabsf(myState[0]-posn[0]) + fabsf(myState[1]-posn[1]) + fabsf(myState[2] - posn[2]);
     //DEBUG(("myState[0]=%f, myState[1]=%f",myState[0],myState[1]));
     //DEBUG(("posn[0]=%f, posn[1]=%f, err=%f",posn[0],posn[1],err));
     if (err > tolerance)
-        api.setPositionTarget(posn);
+    {
+        //Previous Code: api.setPositionTarget(posn);
+        mathVecSubtract(vectorBetween,posn,myPos,3);
+        distance = mathVecMagnitude(vectorBetween,3);
+        if (distance > 0.5)
+        {
+            api.setVelocityTarget(vectorBetween);
+        }
+        else
+        {
+            api.setPositionTarget(posn);
+        }
+    }
     else if (inc)
-            step++;
+    {
+        step++;
+    }
 }
 
 //rotate to target attitude 
@@ -107,7 +125,8 @@ void loop() {
     api.getMyZRState(myState);
     
     //Current attitude is in elements 6,7,8 of myState
-    for(int i=0; i<3; i++) {
+    for(int i=0; i<3; i++) 
+    {
         currAtt[i] = myState[i+6];
         myPos[i] = myState[i];
     }
@@ -120,138 +139,154 @@ void loop() {
     //api.setPosGains(0.5,0.01,3.0);
     
     DEBUG(("Step %d", step));
-    switch(step) {
+    switch(step) 
+    {
         
         //Goto position
         case 1: 
-        if (cycle >= 1)
-        {
-            square[0] = 4;
-        square[1] = -6;
-        square[2] = 5;
-        //Convert square grid to XY coordinates (posn)
-        game.square2pos(square,posn);
         
-        origin[0] = 0;
-        origin[1] = 0;
-        origin[2] = 0;
-        attitude[0] = 1.0;
-        attitude[1] = 0.010;
-        attitude[2] = 0.004;
-        //mathVecSubtract(vectorbetween,origin,myPos, 3);
-        //mathVecNormalize(vectorbetween, 3); 
-        
-       
-        
-        goToPosition(posn,tolerance,STEP_INC);
-        rotatePosition(attitude,0.01,STEP_NO_INC);
+            if (cycle >= 1)
+            {
+                square[0] = 4;
+                square[1] = -6;
+                square[2] = 5;
+                //Convert square grid to XY coordinates (posn)
+                game.square2pos(square,posn);
+                
+                origin[0] = 0;
+                origin[1] = 0;
+                origin[2] = 0;
+                attitude[0] = 1.0;
+                attitude[1] = 0.010;
+                attitude[2] = 0.004;
+                
+                goToPosition(posn,tolerance,STEP_INC);
+                rotatePosition(attitude,0.01,STEP_NO_INC);
+                
+            }
             
-        }
-        else {
-            square[0] = 4;
-        square[1] = -6;
-        square[2] = 5;
-        //Convert square grid to XY coordinates (posn)
-        game.square2pos(square,posn);
-        
-        origin[0] = 0;
-        origin[1] = 0;
-        origin[2] = 0;
-        //mathVecSubtract(vectorbetween,origin,myPos, 3);
-        //mathVecNormalize(vectorbetween, 3); 
-        
-       
-        
-        goToPosition(posn,tolerance,STEP_INC);
-        }
-        
-        //rotatePosition(attitude,0.01,STEP_NO_INC);
-        break;
-        
+            else 
+            {
+                square[0] = 4;
+                square[1] = -6;
+                square[2] = 5;
+                //Convert square grid to XY coordinates (posn)
+                game.square2pos(square,posn);
+                
+                origin[0] = 0;
+                origin[1] = 0;
+                origin[2] = 0;
+    
+                goToPosition(posn,tolerance,STEP_INC);
+            }
+            
+            //rotatePosition(attitude,0.01,STEP_NO_INC);
+            break;
+            
         //Start drill
         case 2:
-        goToPosition(posn,tolerance,STEP_NO_INC);
         
-        if (  game.getDrillEnabled() ) {
-            game.stopDrill();
-        }
-        else {
+            goToPosition(posn,tolerance,STEP_NO_INC);
             
-             store_att[0] = currAtt[0];
-             store_att[1] = currAtt[1];
-             store_att[2] = currAtt[2];
-             attitude[0] = -currAtt[1]; //Nx
-            attitude[1] =  currAtt[0]; //Ny
-            attitude[2] = currAtt[2];
-            api.setAttRateTarget(attitude_target);
-            game.startDrill();
+            if (game.getDrillEnabled()) 
+            {
+                game.stopDrill();
+            }
             
-            //Compute target attitude
-            //For 180 degree rotation, just invert sign
-            //Nz
-            step++;
-        }
-        break;
-        
+            if (game.getDrillError())
+            {
+                game.stopDrill();
+            }
+            
+            else
+            {
+                store_att[0] = currAtt[0];
+                store_att[1] = currAtt[1];
+                store_att[2] = currAtt[2];
+                attitude[0] = -currAtt[1]; //Nx
+                attitude[1] =  currAtt[0]; //Ny
+                attitude[2] = currAtt[2];
+                api.setAttRateTarget(attitude_target);
+                game.startDrill();
+                
+                //Compute target attitude
+                //For 180 degree rotation, just invert sign
+                //Nz
+                step++;
+            }
+            
+            break;
+            
         //Rotate by 180 around Z axis for sample pickup
         case 3:
-        goToPosition(posn,tolerance,STEP_NO_INC);//To hold position
-        rotatePosition(attitude, 0.01,STEP_NO_INC);
-       //Rotate
-        if ( game.checkSample() )
-          step++;
-        break;
         
+            goToPosition(posn,tolerance,STEP_NO_INC);//To hold position
+            rotatePosition(attitude, 0.01,STEP_NO_INC);
+            
+            if (game.getDrillError())
+            {
+                game.stopDrill();
+            }
+            
+            //Rotate
+            if (game.checkSample())
+            {
+                step++;
+            }
+            
+            break;
+            
         //Pick up sample
         case 4:
-        //These 2 statements are to hold current position
-        //and rotation, otherwise we will get a drill error
-        goToPosition(posn,tolerance,STEP_NO_INC);
-        rotatePosition(attitude,0.01,STEP_NO_INC);
-        
-        game.pickupSample();
-        game.stopDrill();
-        step++;
-        break;
-        
+            //These 2 statements are to hold current position
+            //and rotation, otherwise we will get a drill error
+            goToPosition(posn,tolerance,STEP_NO_INC);
+            rotatePosition(attitude,0.01,STEP_NO_INC);
+            
+            game.pickupSample();
+            game.stopDrill();
+            step++;
+            break;
+            
         //Go to base station
         case 5:
-        posn[0] =0;
-        posn[1] =0;
-        posn[2] =0;
-        
-        
-        store_att[0] = currAtt[0];
-        store_att[1] = currAtt[1];
-        store_att[2] = currAtt[2];
-        // Reorient in such a way that x face of sphere rotates to face the -Z direction
-        attitude[0] = 0; 
-        attitude[1] = 0;
-        attitude[2] = -1;
-        goToPosition(posn,tolerance,STEP_INC);
-        rotatePosition(attitude,0.01,STEP_NO_INC);
-        
-        break;
+            posn[0] =0;
+            posn[1] =0;
+            posn[2] =0;
+            
+            
+            store_att[0] = currAtt[0];
+            store_att[1] = currAtt[1];
+            store_att[2] = currAtt[2];
+            // Reorient in such a way that x face of sphere rotates to face the -Z direction
+            attitude[0] = 0; 
+            attitude[1] = 0;
+            attitude[2] = -1;
+            goToPosition(posn,tolerance,STEP_INC);
+            rotatePosition(attitude,0.01,STEP_NO_INC);
+            
+            break;
         
         //Drop sample
         case 6:
-        if ( notRotating(0.01) ) {
-            game.dropSample(0);
-            step++;
-        }
-        else {
-            //Hold position
-            goToPosition(posn,tolerance,STEP_NO_INC);
-            //Stop rotating
-            api.setAttitudeTarget(attitude);
-        }
-        break;
+            if (notRotating(0.01)) 
+            {
+                game.dropSample(0);
+                step++;
+            }
+            else {
+                //Hold position
+                goToPosition(posn,tolerance,STEP_NO_INC);
+                //Stop rotating
+                api.setAttitudeTarget(attitude);
+            }
+            break;
         
         //Done
         case 7:
-       cycle++;
-       step = 1;
-       break;
+           cycle++;
+           step = 1;
+           break;
     }
     
 }

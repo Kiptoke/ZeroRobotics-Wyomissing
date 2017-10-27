@@ -1,17 +1,11 @@
 /*
-
 Wyomissing Robotics Team 3D Phase
-Benjamin's Final Code
+Andrew's Final Code
 
 Tasks:
 
-Add velocity functions to decrease time spent travelling
-
 Fix attitude problem after first base
-
-Change base coordinates to its edge instead 
-of center (remember to make two coordinates for different colored spheres)
-
+Change base coordinates to its edge instead of center (remember to make two coordinates for different colored spheres)
 
 */
 int inc;
@@ -30,6 +24,9 @@ int step;
 float base[3];
 float baseAtt[3];
 float att[3]; 
+
+float distance;
+float vectorBetween[3];
 
 bool has2Samples;
 
@@ -92,6 +89,11 @@ void init(){
     myState[10] = 0;
     myState[11] = 0;
 
+    vectorBetween[0] = 0.0;
+    vectorBetween[1] = 0.0;
+    vectorBetween[2] = 0.0;
+    
+    distance = 0;
 }
 
 //goes to specific position, takes into account tolerance, and set inc to 1 to increase step; set inc to 0 to not increase step
@@ -103,9 +105,22 @@ void goToPosition( float posn[] , float tolerance, int inc) {
     //DEBUG(("myState[0]=%f, myState[1]=%f",myState[0],myState[1]));
     //DEBUG(("posn[0]=%f, posn[1]=%f, err=%f",posn[0],posn[1],err));
     if (err > tolerance)
-        api.setPositionTarget(posn);
+    {
+        mathVecSubtract(vectorBetween,posn,myPosn,3);
+        distance = mathVecMagnitude(vectorBetween,3);
+        if (distance > 0.5)
+        {
+            api.setVelocityTarget(vectorBetween);
+        }
+        else
+        {
+            api.setPositionTarget(posn);
+        }
+    }
     else if (inc == 1)
+    {
         step++;
+    }
         
         
 }
@@ -117,14 +132,15 @@ void rotateToNormal() {
 }
 
 //checks if sphere is not rotating (required for starting drill and dropping samples)
-int notRotating(float tol) {
+int notRotating(float tol) 
+{
     float err = fabsf(myState[9]) + fabsf(myState[10]) + fabsf(myState[11]);
     return err < tol ;
 }
 
 //entire function dedicated to going to base and dumping samples for points
-void goToBase() {
-    
+void goToBase() 
+{
     api.setAttRateTarget(stop);
     api.setAttitudeTarget(baseAtt);
     
@@ -132,23 +148,22 @@ void goToBase() {
     //DEBUG(("myState[0]=%f, myState[1]=%f",myState[0],myState[1]));
     //DEBUG(("posn[0]=%f, posn[1]=%f, err=%f",posn[0],posn[1],err));
     if (err > tolerance)
+    {
         api.setPositionTarget(base);
-   else
-   {
-       for (int i = 0; i < game.getNumSamplesHeld(); i++)
-       {
-           if (notRotating(0.01) || game.atBaseStation())
-           {
+    }
+    else
+    {
+        for (int i = 0; i < game.getNumSamplesHeld(); i++)
+        {
+            if (notRotating(0.01) || game.atBaseStation())
+            {
                 game.dropSample(i);
                 has2Samples = false;
                 step = 1;
-           }
-       }
-   }
-   
-   
+            }
+        }
+    }
 }
-
 
 void loop() {
 
@@ -186,61 +201,67 @@ void loop() {
             }
         
             goToBase();
-    break;
+            break;
     
-    case 1:
-    
-        //sphere stops spinning
-        //api.setAttRateTarget(stop);
-        //api.setAttitudeTarget(stop);
+        case 1:
         
-    
-        //goes to pos2 if sample at pos1 has been drilled
-        //if (game.getDrills(pos1) > 0)
-            //goToPosition(pos2, tolerance, inc);
-       // else
-        goToPosition(pos1, tolerance, inc);
-        break;
-    
-    case 2:
-    
-        //starts drill
-        game.startDrill();
-        step++;
-    break;
-    
-    case 3:
-    
-        //rotates the sphere and keeps sphere in correct position
-        api.setAttRateTarget(targetRate);
-        goToPosition(pos1, tolerance, noInc);
-    
-        //checks if sample is ready for pickup
-        if (game.checkSample())
-        {
-            game.pickupSample();
-            //game.stopDrill();
-        }
-        //checks if 2 samples have been collected
-        //if there is 2 samples already, move spots (avoid geysers and improve efficiency)
-        /*else if (game.getNumSamplesHeld() == 2 && has2Samples == false)
-        {
-            has2Samples = true;
-            pos1[0] += 0.05;
-            game.stopDrill(); 
-            step = 1;
-        }
-        //returns to base if all samples collected or if a geyser spawns
-        else if (game.getNumSamplesHeld() == 5)
-        {
-            step = 0;
-        }*/
-        if (game.isGeyserHere(myPosn))
-            step = 0;
-    break;
+            //sphere stops spinning
+            //api.setAttRateTarget(stop);
+            //api.setAttitudeTarget(stop);
+            
+        
+            //goes to pos2 if sample at pos1 has been drilled
+            //if (game.getDrills(pos1) > 0)
+                //goToPosition(pos2, tolerance, inc);
+           // else
+            goToPosition(pos1, tolerance, inc);
+            break;
+        
+        case 2:
+        
+            //starts drill
+            game.startDrill();
+            if (game.getDrillError())
+            {
+                game.stopDrill();
+            }
+                
+            step++;
+            break;
+        
+        case 3:
+        
+            if (game.getDrillError())
+            {
+                game.stopDrill();
+            }
+                
+            //rotates the sphere and keeps sphere in correct position
+            api.setAttRateTarget(targetRate);
+            goToPosition(pos1, tolerance, noInc);
+        
+            //checks if sample is ready for pickup
+            if (game.checkSample())
+            {
+                game.pickupSample();
+                //game.stopDrill();
+            }
+            //checks if 2 samples have been collected
+            //if there is 2 samples already, move spots (avoid geysers and improve efficiency)
+            /*else if (game.getNumSamplesHeld() == 2 && has2Samples == false)
+            {
+                has2Samples = true;
+                pos1[0] += 0.05;
+                game.stopDrill(); 
+                step = 1;
+            }
+            //returns to base if all samples collected or if a geyser spawns
+            else if (game.getNumSamplesHeld() == 5)
+            {
+                step = 0;
+            }*/
+            if (game.isGeyserHere(myPosn))
+                step = 0;
+            break;
     }
 }
-
-
-
-
